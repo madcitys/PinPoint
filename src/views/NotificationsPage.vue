@@ -173,14 +173,12 @@
             <tr>
               <th></th>
               <th class="level-column">Level</th>
-              <th>Notification Status</th>
+              <th>Issue Status</th>
               <th>Tracking</th>
               <th>Platform</th>
-              <th>Status</th>
-              <th>Assigned To</th>
-              <th>Date Added</th>
               <th>Days Pending</th>
-              <th>Message</th>
+              <th>Summary</th>
+              <th v-if="hasAssignedAlerts">Assigned To</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -216,14 +214,19 @@
               </td>
               <td>{{ alert.trackingNumber }}</td>
               <td>{{ formatPlatform(alert.meta?.platform) }}</td>
-              <td><span class="status-pill" :class="alert.state">{{ formatState(alert.state) }}</span></td>
-              <td>{{ alert.assignedTo?.fullName ?? '-' }}</td>
-              <td>{{ formatDate(alert.meta?.dateAdded) }}</td>
               <td>{{ alert.meta?.daysPending ?? '-' }}</td>
-              <td>{{ alert.message }}</td>
+              <td>{{ formatAlertSummary(alert) }}</td>
+              <td v-if="hasAssignedAlerts">
+                <span
+                  v-if="alert.assignedTo?.fullName"
+                  class="status-pill assignee-pill"
+                >
+                  {{ alert.assignedTo.fullName }}
+                </span>
+                <span v-else class="assignee-empty">-</span>
+              </td>
               <td class="actions-cell">
                 <div class="actions-grid">
-                <button v-if="stateView !== 'resolved'" class="table-action" type="button" @click.stop="openReportPage(alert)">Reports</button>
                 <button
                   v-if="stateView !== 'resolved'"
                   class="table-action route"
@@ -319,6 +322,7 @@ let cleanupNotifications = null;
 let syncPollTimer = null;
 
 const paginatedAlerts = computed(() => alerts.value);
+const hasAssignedAlerts = computed(() => paginatedAlerts.value.some((alert) => alert.assignedTo?.fullName));
 const selectedDateRangeText = computed(() => {
   if (dateRange.value.length !== 2) return '';
   const [start, end] = dateRange.value;
@@ -352,6 +356,10 @@ function formatSeverity(value) {
   return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
 }
 
+function formatDuration(days) {
+  return `${days} day${days === 1 ? '' : 's'}`;
+}
+
 function formatState(value) {
   if (!value) return '-';
   if (value === 'acknowledged') {
@@ -381,6 +389,29 @@ function formatNotificationStatus(value) {
     .split('_')
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
     .join(' ');
+}
+
+function formatAlertSummary(alert) {
+  const status = alert.meta?.status;
+  const daysPending = Number(alert.meta?.daysPending ?? 0);
+
+  if (status === 'Lost') {
+    return daysPending > 0
+      ? `Marked lost after ${formatDuration(daysPending)} without outbound movement.`
+      : 'Marked lost for manual review.';
+  }
+
+  if (status === 'Missing') {
+    return daysPending > 0
+      ? `Marked missing after ${formatDuration(daysPending)} without outbound movement.`
+      : 'Marked missing for manual review.';
+  }
+
+  if (daysPending > 0) {
+    return `Pending after ${formatDuration(daysPending)} without outbound movement.`;
+  }
+
+  return 'Pending review due to missing outbound movement.';
 }
 
 function openDateFilter() {
@@ -434,15 +465,6 @@ async function openAlert(alert) {
     name: 'OrderRecords',
     query: {
       highlight: alert.trackingNumber,
-    },
-  });
-}
-
-async function openReportPage(alert) {
-  await router.push({
-    name: 'ReportsIssues',
-    query: {
-      search: alert.trackingNumber,
     },
   });
 }
@@ -1000,7 +1022,7 @@ onBeforeUnmount(() => {
 
 table {
   width: 100%;
-  min-width: 1380px;
+  min-width: 1120px;
   border-collapse: collapse;
   font-size: 14px;
   border: 1px solid var(--border-soft);
@@ -1059,7 +1081,16 @@ tr.critical td {
 }
 
 .clickable-row:hover td {
-  background: rgba(255, 122, 26, 0.06);
+  background: rgba(255, 122, 26, 0.12);
+}
+
+.clickable-row:hover {
+  box-shadow: inset 0 0 0 1px rgba(255, 122, 26, 0.18);
+}
+
+.clickable-row:hover .status-pill.notification-status,
+.clickable-row:hover .pill {
+  transform: translateY(-1px);
 }
 
 .select-cell {
@@ -1161,6 +1192,17 @@ tr.critical td {
   color: #b42318;
 }
 
+.assignee-pill {
+  min-width: 124px;
+  background: #f4edff;
+  color: #7d42d8;
+}
+
+.assignee-empty {
+  color: var(--text-faint);
+  font-weight: 700;
+}
+
 .table-action {
   display: inline-flex;
   align-items: center;
@@ -1176,10 +1218,17 @@ tr.critical td {
   font-weight: 800;
 }
 
-.table-action.warn {
-  border-color: rgba(180, 35, 24, 0.14);
-  background: #ffe7e5;
-  color: #b42318;
+.table-action.route {
+  border-color: transparent;
+  background: var(--bg-accent);
+  color: #ffffff;
+  box-shadow: 0 10px 18px rgba(255, 90, 0, 0.18);
+}
+
+.table-action.flag {
+  border-color: rgba(255, 133, 51, 0.24);
+  background: #fff7f1;
+  color: #c75a10;
 }
 
 .table-action:disabled {
@@ -1188,7 +1237,7 @@ tr.critical td {
 }
 
 .actions-cell {
-  min-width: 340px;
+  min-width: 300px;
   padding-top: 12px;
   vertical-align: top;
 }

@@ -89,10 +89,6 @@
                 <button class="alert-action flag" :disabled="Boolean(actionBusy[alert.id])" @click.stop="flagForReview(alert)">
                   {{ actionBusy[alert.id] ? 'Working...' : 'Flag for Review' }}
                 </button>
-                <button class="alert-action report" :disabled="Boolean(actionBusy[alert.id])" @click.stop="openReportsForAlert(alert)">
-                  Reports
-                </button>
-
               </div>
             </article>
 
@@ -333,16 +329,6 @@ async function goToAlert(alert) {
     name: 'OrderRecords',
     query: {
       highlight: alert.trackingNumber,
-    },
-  });
-  showAlerts.value = false;
-}
-
-async function openReportsForAlert(alert) {
-  await router.push({
-    name: 'ReportsIssues',
-    query: {
-      search: alert.trackingNumber,
     },
   });
   showAlerts.value = false;
@@ -732,33 +718,13 @@ onUnmounted(() => {
 }
 
 .alert-action.flag {
-  color: #c75a10;
-  padding: 0;
-  min-height: auto;
-  background: transparent;
-  box-shadow: none;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  align-self: center;
-}
-
-.alert-action.report,
-.alert-action.read {
   min-height: 32px;
   padding: 0 12px;
   border-radius: 8px;
-}
-
-.alert-action.report {
-  border-color: rgba(15, 23, 42, 0.12);
-  color: #334155;
-  background: #ffffff;
-}
-
-.alert-action.read {
-  border-color: rgba(198, 77, 22, 0.24);
-  color: #b64712;
+  border: 1px solid rgba(255, 133, 51, 0.24);
+  color: #c75a10;
   background: #fff7f1;
+  box-shadow: none;
 }
 
 .alerts-inline-footer {

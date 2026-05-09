@@ -9,7 +9,7 @@
         </div>
         <div class="header-actions">
           <button class="btn export-btn" @click="exportReports">Export</button>
-          <button class="btn dark" @click="goToReportIssue">+ Report Issue</button>
+          <button class="btn dark" @click="openCreateModal">+ Report Issue</button>
           <button class="btn" :disabled="selectedCount === 0 || loading" @click="openBulkEdit">Edit</button>
         </div>
       </div>
@@ -201,6 +201,71 @@
       </div>
     </div>
 
+    <div v-if="showCreateModal" class="modal-backdrop" @click.self="closeCreateModal">
+      <div class="modal create-modal">
+        <button class="modal-close" @click="closeCreateModal">x</button>
+        <h3>Add Report</h3>
+
+        <div class="form-group">
+          <label>Tracking Number</label>
+          <div class="tracking-input-wrap">
+            <input
+              v-model="createForm.trackingNumber"
+              type="text"
+              class="field-input tracking-input"
+              placeholder="Enter tracking number"
+            />
+            <div class="tracking-icon-box" aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <path d="M7 10V8a5 5 0 1 1 10 0v2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+                <rect x="5" y="10" width="14" height="10" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8" />
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Issue Type</label>
+          <select v-model="createForm.type" class="field-input field-select">
+            <option v-for="type in reportTypes" :key="type.value" :value="type.value">{{ type.label }}</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Severity</label>
+          <select v-model="createForm.severity" class="field-input field-select">
+            <option v-for="severity in reportSeverities" :key="severity.value" :value="severity.value">{{ severity.label }}</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Issue Details</label>
+          <textarea
+            v-model="createForm.details"
+            class="remarks-textbox create-remarks"
+            placeholder="Describe the issue and what needs review"
+          ></textarea>
+        </div>
+
+        <div class="form-group">
+          <label>Initial Status</label>
+          <div class="status-options">
+            <label><input type="radio" value="Unresolved" v-model="createForm.status" /> Unresolved</label>
+            <label><input type="radio" value="Resolved" v-model="createForm.status" /> Resolved</label>
+          </div>
+        </div>
+
+        <p v-if="createError" class="page-message error">{{ createError }}</p>
+
+        <div class="form-actions create-actions">
+          <button class="btn ghost-btn" @click="closeCreateModal" :disabled="savingCreate">Cancel</button>
+          <button class="btn primary create-submit-btn" @click="submitCreateReport" :disabled="savingCreate">
+            {{ savingCreate ? 'Submitting...' : 'Add Report' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
     <div v-if="showEditModal" class="modal-backdrop" @click.self="closeEdit">
       <div class="modal edit-modal">
         <button class="modal-close" @click="closeEdit">x</button>
@@ -244,20 +309,22 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import flatpickr from 'flatpickr'
 import 'flatpickr/dist/flatpickr.css'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { apiJsonRequest, apiRequest } from '../lib/api'
 import { fetchAlerts } from '../lib/alerts'
 import { DATA_EVENTS, emitDataEvent, subscribeToDataEvent } from '../lib/dataEvents'
 
-const router = useRouter()
 const search = ref('')
 const selectedIssueIds = ref([])
+const showCreateModal = ref(false)
 const showEditModal = ref(false)
 const showFilterPopup = ref(false)
 const loading = ref(false)
+const savingCreate = ref(false)
 const savingEdit = ref(false)
 const savingStatusId = ref(null)
 const pageError = ref('')
+const createError = ref('')
 const editError = ref('')
 const issues = ref([])
 const alerts = ref([])
@@ -271,11 +338,29 @@ const dateTrigger = ref(null)
 const filterAnchor = ref(null)
 const dateRange = ref([])
 let calendarInstance = null
+const reportTypes = [
+  { value: 'delivery delay', label: 'Delivery Delay' },
+  { value: 'damaged', label: 'Damaged Parcel' },
+  { value: 'missing item', label: 'Missing Item' },
+  { value: 'wrong item', label: 'Wrong Item' },
+  { value: 'address issue', label: 'Address Issue' },
+  { value: 'other', label: 'Other' },
+]
+const reportSeverities = [
+  { value: 'warning', label: 'Warning' },
+  { value: 'critical', label: 'Critical' },
+]
+const issueMetadataLabelMap = {
+  type: 'Issue Type',
+  severity: 'Severity',
+  details: 'Details',
+}
 
 const filterStatus = ref({ Resolved: false, Unresolved: false })
 const selectedIssues = computed(() => issues.value.filter(issue => selectedIssueIds.value.includes(issue.id)))
 const selectedCount = computed(() => selectedIssues.value.length)
 const selectedIssue = computed(() => selectedIssues.value[0] ?? null)
+const createForm = ref(getDefaultCreateForm())
 const editForm = ref({ ids: [], trackingNumber: '', summary: '', remarks: '', status: 'Unresolved' })
 const reportsSummary = computed(() => {
   const now = new Date()
@@ -327,15 +412,18 @@ const issueRows = computed(() => {
   return issues.value
     .map((issue, index) => {
       const linkedAlert = alerts.value.find((alert) => alert.trackingNumber === issue.trackingNumber)
-      const severity = linkedAlert?.severity === 'critical' ? 'critical' : 'warning'
-      const type = /damage|damaged/i.test(issue.remarks) ? 'damaged' : 'other'
+      const metadata = extractIssueMetadata(issue.remarks)
+      const severity = linkedAlert?.severity ?? metadata.severity ?? 'warning'
+      const type = metadata.type ?? (/damage|damaged/i.test(issue.remarks) ? 'damaged' : 'other')
       const statusClass = issue.status === 'Resolved' ? 'resolved' : 'unresolved'
+      const subtitle = metadata.details ?? issue.remarks
+      const title = linkedAlert ? `Flagged for review: ${issue.trackingNumber}` : `Reported issue: ${issue.trackingNumber}`
 
       return {
         ...issue,
         displayId: Math.max(1, meta.value.total - startIndex - index),
-        title: `Flagged for review: ${issue.trackingNumber}`,
-        subtitle: issue.remarks,
+        title,
+        subtitle,
         type,
         severity,
         reportedBy: issue.reportedBy || '-',
@@ -394,6 +482,68 @@ function formatDate(value) {
 function formatShortDate(value) {
   if (!value) return '-'
   return new Date(value).toLocaleDateString(undefined)
+}
+
+function getDefaultCreateForm() {
+  return {
+    trackingNumber: '',
+    type: 'delivery delay',
+    severity: 'warning',
+    details: '',
+    status: 'Unresolved',
+  }
+}
+
+function normalizeLabel(value) {
+  return value
+    .split(' ')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
+}
+
+function buildReportRemarks() {
+  const lines = [
+    `${issueMetadataLabelMap.type}: ${normalizeLabel(createForm.value.type)}`,
+    `${issueMetadataLabelMap.severity}: ${normalizeLabel(createForm.value.severity)}`,
+    `${issueMetadataLabelMap.details}: ${createForm.value.details.trim()}`,
+  ]
+
+  return lines.join('\n')
+}
+
+function extractIssueMetadata(remarks = '') {
+  const lines = String(remarks)
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+
+  const details = []
+  const metadata = {}
+
+  for (const line of lines) {
+    if (line.startsWith(`${issueMetadataLabelMap.type}:`)) {
+      metadata.type = line.slice(issueMetadataLabelMap.type.length + 1).trim().toLowerCase()
+      continue
+    }
+
+    if (line.startsWith(`${issueMetadataLabelMap.severity}:`)) {
+      metadata.severity = line.slice(issueMetadataLabelMap.severity.length + 1).trim().toLowerCase()
+      continue
+    }
+
+    if (line.startsWith(`${issueMetadataLabelMap.details}:`)) {
+      details.push(line.slice(issueMetadataLabelMap.details.length + 1).trim())
+      continue
+    }
+
+    details.push(line)
+  }
+
+  if (details.length) {
+    metadata.details = details.join('\n')
+  }
+
+  return metadata
 }
 
 async function loadReports(page = meta.value.page) {
@@ -469,6 +619,16 @@ function openBulkEdit() {
   openEdit()
 }
 
+function openCreateModal() {
+  createError.value = ''
+  createForm.value = getDefaultCreateForm()
+  showCreateModal.value = true
+}
+
+function closeCreateModal() {
+  showCreateModal.value = false
+}
+
 function closeEdit() {
   showEditModal.value = false
 }
@@ -509,8 +669,38 @@ function exportReports() {
   URL.revokeObjectURL(url)
 }
 
-async function goToReportIssue() {
-  await router.push({ name: 'OrderRecords' })
+async function submitCreateReport() {
+  createError.value = ''
+
+  if (!createForm.value.trackingNumber.trim()) {
+    createError.value = 'Tracking number is required.'
+    return
+  }
+
+  if (createForm.value.details.trim().length < 5) {
+    createError.value = 'Issue details must be at least 5 characters.'
+    return
+  }
+
+  savingCreate.value = true
+
+  try {
+    await apiRequest('/reports', {
+      method: 'POST',
+      body: {
+        trackingNumber: createForm.value.trackingNumber.trim(),
+        remarks: buildReportRemarks(),
+        status: createForm.value.status,
+      },
+    })
+    closeCreateModal()
+    await loadReports(1)
+    emitDataEvent(DATA_EVENTS.notificationsRefresh)
+  } catch (error) {
+    createError.value = error.message
+  } finally {
+    savingCreate.value = false
+  }
 }
 
 async function updateIssue() {
@@ -1112,28 +1302,39 @@ tr.selected td {
   cursor: not-allowed;
 }
 
-.modal-backdrop,
-.modal {
-  background: #fff;
-  padding: 28px;
-  width: min(380px, calc(100vw - 32px));
-  border-radius: 22px;
+.modal-backdrop {
   position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+  inset: 0;
+  z-index: 1400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(15, 23, 42, 0.28);
+  backdrop-filter: blur(4px);
+}
+
+.modal {
+  position: relative;
+  width: min(420px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  padding: 30px 34px 34px;
+  border-radius: 30px;
+  background: #ffffff;
   color: var(--text-main);
-  border: 1px solid var(--border-soft);
-  box-shadow: var(--shadow-soft);
+  border: 1px solid rgba(112, 128, 154, 0.18);
+  box-shadow: 0 32px 80px rgba(15, 23, 42, 0.22);
 }
 
 .modal-close {
   position: absolute;
-  top: 10px;
-  right: 12px;
+  top: 14px;
+  right: 16px;
   background: none;
   border: none;
-  font-size: 22px;
+  font-size: 28px;
+  line-height: 1;
   cursor: pointer;
   color: var(--text-muted) !important;
 }
@@ -1340,18 +1541,73 @@ tr.selected td {
   color: rgba(112, 128, 154, 0.42);
 }
 
+.create-modal,
 .edit-modal {
-  width: min(420px, calc(100vw - 32px));
+  width: min(500px, calc(100vw - 32px));
 }
 
-.edit-modal h3 {
+.modal h3 {
   text-align: center;
-  margin: 0 0 18px;
-  font-size: 1.4rem;
+  margin: 4px 0 28px;
+  font-size: 1.95rem;
+  line-height: 1.1;
 }
 
+.create-modal .form-group,
 .edit-modal .form-group {
+  display: flex;
+  flex-direction: column;
   margin-bottom: 14px;
+}
+
+.form-group label {
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text-muted);
+}
+
+.field-input {
+  width: 100%;
+  min-height: 60px;
+  padding: 0 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(210, 219, 231, 0.95);
+  background: #ffffff;
+  color: var(--text-main);
+  font-size: 16px;
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.03);
+}
+
+.field-select {
+  appearance: auto;
+  cursor: pointer;
+}
+
+.tracking-input-wrap {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 58px;
+  gap: 12px;
+}
+
+.tracking-input {
+  text-transform: uppercase;
+}
+
+.tracking-icon-box {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 60px;
+  border-radius: 16px;
+  border: 1.5px solid #4b74ff;
+  color: #4b74ff;
+  background: #f7f9ff;
+}
+
+.tracking-icon-box svg {
+  width: 20px;
+  height: 20px;
 }
 
 .status-options {
@@ -1375,6 +1631,10 @@ tr.selected td {
   width: 160px;
 }
 
+.create-remarks {
+  min-height: 126px;
+}
+
 .remarks-textbox {
   min-height: 120px;
   resize: vertical;
@@ -1390,6 +1650,21 @@ tr.selected td {
   display: flex;
   justify-content: center;
   margin-top: 22px;
+}
+
+.create-actions {
+  gap: 14px;
+}
+
+.ghost-btn {
+  min-width: 148px;
+  background: #ffffff;
+  color: #253046;
+  box-shadow: none;
+}
+
+.create-submit-btn {
+  min-width: 164px;
 }
 
 .table-footer {
