@@ -1,0 +1,79 @@
+html {
+  font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color: #1f2937;
+  background:
+    radial-gradient(circle at top left, rgba(255, 115, 0, 0.08), transparent 26%),
+    linear-gradient(180deg, #fff8f2 0%, #f6f7fb 28%, #eef2f7 100%);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+:root {
+  --bg-app: #eef2f7;
+  --bg-surface: rgba(255, 255, 255, 0.94);
+  --bg-surface-strong: #ffffff;
+  --bg-panel: #f6f8fb;
+  --bg-sidebar: linear-gradient(180deg, #1a1b1f 0%, #22242a 100%);
+  --bg-sidebar-active: linear-gradient(135deg, #ff7a1a 0%, #ff5a00 100%);
+  --bg-accent: linear-gradient(135deg, #ff7a1a 0%, #ff5a00 100%);
+  --bg-accent-soft: rgba(255, 111, 0, 0.1);
+  --bg-danger-soft: #fff1ed;
+  --bg-success-soft: #edfdf2;
+  --bg-warning-soft: #fff6df;
+  --text-main: #18212f;
+  --text-muted: #69758a;
+  --text-faint: #8d97a8;
+  --text-inverse: #ffffff;
+  --border-soft: rgba(112, 128, 154, 0.18);
+  --border-strong: rgba(31, 41, 55, 0.16);
+  --shadow-soft: 0 20px 45px rgba(15, 23, 42, 0.08);
+  --shadow-card: 0 12px 28px rgba(15, 23, 42, 0.08);
+  --radius-lg: 24px;
+  --radius-md: 18px;
+  --radius-sm: 12px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  width: 100%;
+  min-height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  min-width: 320px;
+  margin: 0;
+  color: var(--text-main);
+  background: transparent;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+img {
+  max-width: 100%;
+  display: block;
+}

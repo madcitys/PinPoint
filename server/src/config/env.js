@@ -1,0 +1,48 @@
+import dotenv from 'dotenv';
+
+dotenv.config({ path: 'server/src/.env' });
+
+function requireEnv(name) {
+  const value = process.env[name];
+
+  if (!value) {
+    throw new Error(`Missing required environment variable: ${name}`);
+  }
+
+  return value;
+}
+
+function parseNumber(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function parseOrigins(value) {
+  if (!value || value === '*') {
+    return '*';
+  }
+
+  return value
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+}
+
+function parseBoolean(value, fallback = false) {
+  if (value === undefined) {
+    return fallback;
+  }
+
+  return ['1', 'true', 'yes', 'on'].includes(String(value).trim().toLowerCase());
+}
+
+export const env = {
+  nodeEnv: process.env.NODE_ENV ?? 'development',
+  port: parseNumber(process.env.PORT, 4000),
+  corsOrigins: parseOrigins(process.env.CORS_ORIGIN),
+  supabaseUrl: requireEnv('SUPABASE_URL'),
+  supabaseServiceRoleKey: requireEnv('SUPABASE_SERVICE_ROLE_KEY'),
+  jwtSecret: requireEnv('JWT_SECRET'),
+  tokenTtlHours: parseNumber(process.env.TOKEN_TTL_HOURS, 12),
+  devBypassAuth: parseBoolean(process.env.DEV_BYPASS_AUTH, false),
+};
