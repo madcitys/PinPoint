@@ -1,7 +1,13 @@
 import dotenv from 'dotenv';
 import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const envPath = ['server/.env', 'server/src/.env'].find((candidate) => fs.existsSync(candidate));
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const envPath = [
+  path.join(__dirname, '../../.env'),
+  path.join(__dirname, '../.env'),
+].find((candidate) => fs.existsSync(candidate));
 
 if (envPath) {
   dotenv.config({ path: envPath });

@@ -20,7 +20,7 @@ This repo now includes:
 
 1. Create a Supabase project.
 2. Run the SQL in `server/supabase/consolidated_schema.sql` inside the Supabase SQL editor.
-3. Create `server/.env` and fill in your backend values:
+3. Create `server/src/.env` and fill in your backend values:
 
 ```env
 PORT=4000
@@ -54,7 +54,7 @@ The backend runs on `http://localhost:4000` by default and exposes its API under
 
 ## Important Notes
 
-- Use the Supabase `service_role` key only in the backend `server/.env`.
+- Use the Supabase `service_role` key only in the backend `server/src/.env`.
 - The first registered user becomes the admin automatically.
 - The first registration's security code seeds the shared organization security code.
 - Later registrations and password resets must use that same security code unless an admin rotates it.
