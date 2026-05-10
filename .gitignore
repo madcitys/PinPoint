@@ -16,7 +16,8 @@ src/.env
 server/.env
 server/src/.env
 supabase/*
-
+ACTION_IMPLEMENTATION_ANALYSIS.md
+SCAN_STATUS_CYCLE_MIGRATION.sql
 
 # Editor directories and files
 .vscode/*
